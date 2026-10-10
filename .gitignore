@@ -1,0 +1,50 @@
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+
+# Local configuration
+.env
+.env.*
+!.env.example
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Data
+data/raw/
+data/interim/
+data/processed/
+data/external/
+*.parquet
+*.duckdb
+*.sqlite
+*.sqlite3
+
+# Models and experiments
+artifacts/
+models/
+mlruns/
+wandb/
+checkpoints/
+*.ckpt
+*.pt
+*.pth
+
+# Logs
+logs/
+*.log
+
+# IDE
+.idea/
