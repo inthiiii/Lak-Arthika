@@ -9,6 +9,7 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 .coverage
+.coverage.*
 htmlcov/
 
 # Virtual environments
@@ -34,7 +35,7 @@ data/external/
 
 # Models and experiments
 artifacts/
-models/
+/models/
 mlruns/
 wandb/
 checkpoints/

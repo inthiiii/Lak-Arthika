@@ -5,8 +5,12 @@ description = "A continuously learning digital twin for Sri Lanka's essential ec
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "beautifulsoup4>=4.15.0",
     "fastapi",
+    "httpx>=0.28.1",
+    "polars>=2.0.0",
     "pydantic-settings",
+    "pymupdf>=1.28.2",
     "structlog",
     "typer",
     "uvicorn[standard]",
@@ -17,7 +21,6 @@ lak-arthika = "lak_arthika.cli:app"
 
 [dependency-groups]
 dev = [
-    "httpx",
     "mypy",
     "pre-commit",
     "pytest",
@@ -62,3 +65,7 @@ indent-style = "space"
 python_version = "3.12"
 strict = true
 packages = ["lak_arthika"]
+
+[[tool.mypy.overrides]]
+module = ["pymupdf"]
+ignore_missing_imports = true
