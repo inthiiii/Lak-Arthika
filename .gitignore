@@ -28,6 +28,8 @@ data/raw/
 data/interim/
 data/processed/
 data/external/
+data/metadata/
+data/analytics/
 *.parquet
 *.duckdb
 *.sqlite

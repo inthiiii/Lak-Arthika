@@ -1,21 +1,15 @@
-```markdown
 # LakArthika
 
-LakArthika is an experimental, continuously learning digital twin for
-Sri Lanka's essential economy.
-
-It is designed to:
-
-- forecast essential commodity prices
-- detect emerging price pressure
-- model relationships between commodities and markets
-- provide uncertainty-aware scenario simulations
-- support households, policymakers and businesses
-- communicate results through APIs, dashboards and maps
+LakArthika is an experimental, continuously learning digital twin for Sri Lanka's
+essential economy. It provides reproducible market-price ingestion, historical analytics,
+APIs and geospatial foundations for future forecasting and scenario simulation.
 
 ## Current status
 
-Phase 0: project and architecture foundation.
+- Phase 0: project and architecture foundation
+- Phase 1A: one official HARTI bulletin to validated API records
+- Phase 1B: resumable historical data engine, quality quarantine, DuckDB analytics and
+  map-ready market references
 
 ## Requirements
 
@@ -32,36 +26,87 @@ cp .env.example .env
 uv run pre-commit install
 ```
 
+## Historical HARTI workflow
+
+Discover archive links without downloading documents:
+
+```bash
+uv run lak-arthika harti discover --from 2025-01-01 --to 2025-12-31
+```
+
+Resume downloads, then validate and publish them:
+
+```bash
+uv run lak-arthika harti download --from 2025-01-01 --to 2025-12-31
+uv run lak-arthika harti process --from 2025-01-01 --to 2025-12-31
+```
+
+Or run the complete workflow:
+
+```bash
+uv run lak-arthika harti backfill --from 2025-01-01 --to 2025-12-31
+```
+
+If HARTI blocks automated access, preserve a manually downloaded official PDF:
+
+```bash
+uv run lak-arthika harti ingest-history-file bulletin.pdf \
+  --bulletin-date 2026-10-07 \
+  --source-url "https://www.harti.gov.lk/path/to/official.pdf"
+```
+
+Query the historical analytical layer:
+
+```bash
+uv run lak-arthika harti query \
+  --market Dambulla \
+  --commodity Carrot \
+  --from 2025-01-01
+```
+
+## Data architecture
+
+```text
+Official HARTI archive
+        │
+        ▼
+Manifest ──► immutable raw PDFs (bronze)
+        │
+        ▼
+Versioned parser ──► interim JSONL (silver candidate)
+        │
+        ▼
+Quality gate ──failed──► quarantine log
+        │ passed
+        ▼
+Partitioned Parquet (gold) ──► DuckDB views ──► API / map / ML
+```
+
+Generated datasets are intentionally excluded from Git. The market reference at
+`data/reference/markets.csv` is version controlled because it is reviewed application
+configuration.
+
 ## Run the API
 
 ```bash
 uv run uvicorn lak_arthika.api:app --reload
 ```
 
-Open:
+Useful endpoints:
 
-- API documentation: http://127.0.0.1:8000/docs
-- Health endpoint: http://127.0.0.1:8000/health
+- `GET /health`
+- `GET /v1/prices/latest`
+- `GET /v1/prices/history`
+- `GET /v1/prices/summary`
+- `GET /v1/markets`
+- `GET /v1/markets/{market_id}/prices`
+- `GET /v1/data-quality/status`
+- Interactive documentation: <http://127.0.0.1:8000/docs>
 
-## Run the checks
-
-```bash
-uv run ruff check .
-uv run ruff format --check .
-uv run mypy src
-uv run pytest
-```
-
-Or:
+## Run checks
 
 ```bash
 make check
-```
-
-## Command-line interface
-
-```bash
-uv run lak-arthika info
 ```
 
 ## Project principles
@@ -75,7 +120,6 @@ uv run lak-arthika info
 
 ## Disclaimer
 
-LakArthika is an experimental research and decision-support platform.
-Its forecasts and simulations must not be treated as guaranteed
-economic outcomes or automatic policy recommendations.
-```
+LakArthika is an experimental research and decision-support platform. Its forecasts and
+simulations must not be treated as guaranteed economic outcomes or automatic policy
+recommendations.

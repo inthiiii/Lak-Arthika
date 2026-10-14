@@ -1,5 +1,6 @@
 """LakArthika HTTP API."""
 
+from datetime import date
 from pathlib import Path
 from typing import Literal
 
@@ -9,7 +10,12 @@ from pydantic import BaseModel
 
 from lak_arthika import __version__
 from lak_arthika.config import get_settings
+from lak_arthika.models.manifest import BulletinManifestRecord
+from lak_arthika.models.market import MarketReference
 from lak_arthika.models.price import PriceRecord
+from lak_arthika.models.quality import QualityStatus
+from lak_arthika.storage.analytics import query_price_history, query_price_summary
+from lak_arthika.storage.manifest import load_manifest
 
 
 class HealthResponse(BaseModel):
@@ -61,8 +67,39 @@ def load_latest_prices(
     return [PriceRecord.model_validate(row) for row in latest.to_dicts()]
 
 
+def load_markets(markets_path: Path) -> list[MarketReference]:
+    """Load the version-controlled market and coordinate reference."""
+
+    if not markets_path.exists():
+        raise FileNotFoundError(markets_path)
+
+    return [MarketReference.model_validate(row) for row in pl.read_csv(markets_path).to_dicts()]
+
+
+def quality_status(records: list[BulletinManifestRecord]) -> QualityStatus:
+    """Aggregate manifest states into an operational data-quality status."""
+
+    counts = {
+        status: sum(record.status == status for record in records)
+        for status in ("processed", "quarantined", "failed")
+    }
+    pending = sum(record.status in {"discovered", "downloaded"} for record in records)
+    errors = [record.error_message for record in records if record.error_message]
+    return QualityStatus(
+        total_bulletins=len(records),
+        processed_bulletins=counts["processed"],
+        quarantined_bulletins=counts["quarantined"],
+        failed_bulletins=counts["failed"],
+        pending_bulletins=pending,
+        latest_error=errors[-1] if errors else None,
+    )
+
+
 def create_app(
     price_data_path: Path | None = None,
+    analytics_path: Path | None = None,
+    markets_path: Path | None = None,
+    manifest_path: Path | None = None,
 ) -> FastAPI:
     """Create and configure the FastAPI application."""
 
@@ -77,6 +114,9 @@ def create_app(
     )
 
     application.state.harti_price_data_path = price_data_path or settings.harti_price_parquet_path
+    application.state.harti_analytics_path = analytics_path or settings.harti_analytics_path
+    application.state.markets_reference_path = markets_path or settings.markets_reference_path
+    application.state.harti_manifest_path = manifest_path or settings.harti_manifest_path
 
     @application.get(
         "/health",
@@ -129,6 +169,108 @@ def create_app(
                     "or `lak-arthika harti ingest-file --help` first."
                 ),
             ) from error
+
+    @application.get("/v1/prices/history", tags=["Prices"])
+    def price_history(
+        request: Request,
+        market: str | None = None,
+        commodity: str | None = None,
+        district: str | None = None,
+        province: str | None = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
+        limit: int = Query(default=1_000, ge=1, le=10_000),
+    ) -> list[dict[str, object]]:
+        """Return filtered historical observations and moving averages."""
+
+        database_path = Path(request.app.state.harti_analytics_path)
+        if not database_path.exists():
+            raise HTTPException(status_code=503, detail="Historical analytics are not available.")
+
+        return query_price_history(
+            database_path=database_path,
+            market=market,
+            commodity=commodity,
+            district=district,
+            province=province,
+            start_date=start_date,
+            end_date=end_date,
+            limit=limit,
+        )
+
+    @application.get("/v1/prices/summary", tags=["Prices"])
+    def price_summary(
+        request: Request,
+        start_date: date | None = None,
+        end_date: date | None = None,
+    ) -> list[dict[str, object]]:
+        """Return price range, average and volatility summaries."""
+
+        database_path = Path(request.app.state.harti_analytics_path)
+        if not database_path.exists():
+            raise HTTPException(status_code=503, detail="Historical analytics are not available.")
+        return query_price_summary(
+            database_path=database_path,
+            start_date=start_date,
+            end_date=end_date,
+        )
+
+    @application.get(
+        "/v1/markets",
+        response_model=list[MarketReference],
+        tags=["Markets"],
+    )
+    def markets(request: Request) -> list[MarketReference]:
+        """Return geocoded markets for map clients."""
+
+        try:
+            return load_markets(Path(request.app.state.markets_reference_path))
+        except FileNotFoundError as error:
+            raise HTTPException(
+                status_code=503, detail="Market reference is not available."
+            ) from error
+
+    @application.get("/v1/markets/{market_id}/prices", tags=["Markets"])
+    def market_prices(
+        market_id: str,
+        request: Request,
+        start_date: date | None = None,
+        end_date: date | None = None,
+        limit: int = Query(default=1_000, ge=1, le=10_000),
+    ) -> list[dict[str, object]]:
+        """Return historical prices for one stable map market identifier."""
+
+        database_path = Path(request.app.state.harti_analytics_path)
+        try:
+            reference_markets = load_markets(Path(request.app.state.markets_reference_path))
+        except FileNotFoundError as error:
+            raise HTTPException(
+                status_code=503, detail="Market reference is not available."
+            ) from error
+        if not database_path.exists():
+            raise HTTPException(status_code=503, detail="Historical analytics are not available.")
+
+        market = next((item for item in reference_markets if item.market_id == market_id), None)
+        if market is None:
+            raise HTTPException(status_code=404, detail="Market was not found.")
+        return query_price_history(
+            database_path=database_path,
+            market=market.market_name,
+            start_date=start_date,
+            end_date=end_date,
+            limit=limit,
+        )
+
+    @application.get(
+        "/v1/data-quality/status",
+        response_model=QualityStatus,
+        tags=["Data Quality"],
+    )
+    def data_quality_status(request: Request) -> QualityStatus:
+        """Expose manifest-backed ingestion health."""
+
+        records = load_manifest(Path(request.app.state.harti_manifest_path))
+        return quality_status(records)
 
     return application
 
