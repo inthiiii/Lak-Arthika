@@ -21,8 +21,16 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     harti_raw_root: Path = Path("data/raw/harti/daily")
+    harti_interim_root: Path = Path("data/interim/harti/daily")
+    harti_partitioned_root: Path = Path("data/processed/harti/prices")
     harti_price_parquet_path: Path = Path("data/processed/harti/daily_wholesale_prices.parquet")
     harti_validation_report_path: Path = Path("data/processed/harti/last_validation.json")
+    harti_manifest_path: Path = Path("data/metadata/harti_bulletins.parquet")
+    harti_quarantine_path: Path = Path("data/metadata/harti_quarantine.jsonl")
+    harti_analytics_path: Path = Path("data/analytics/lak_arthika.duckdb")
+    markets_reference_path: Path = Path("data/reference/markets.csv")
+    harti_request_delay_seconds: float = 1.0
+    harti_max_download_attempts: int = 3
 
 
 @lru_cache

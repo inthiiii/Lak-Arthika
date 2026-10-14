@@ -6,11 +6,13 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "beautifulsoup4>=4.15.0",
+    "duckdb>=1.4.1",
     "fastapi",
     "httpx>=0.28.1",
     "polars>=2.0.0",
     "pydantic-settings",
     "pymupdf>=1.28.2",
+    "pytz>=2025.2",
     "structlog",
     "typer",
     "uvicorn[standard]",
@@ -67,5 +69,5 @@ strict = true
 packages = ["lak_arthika"]
 
 [[tool.mypy.overrides]]
-module = ["pymupdf"]
+module = ["duckdb", "pymupdf"]
 ignore_missing_imports = true

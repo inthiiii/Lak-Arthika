@@ -10,10 +10,11 @@ from lak_arthika.ingestion.harti import (
     DownloadedBulletin,
     discover_latest_bulletin,
     download_bulletin,
-    extract_wholesale_vegetable_prices,
     preserve_local_bulletin,
 )
+from lak_arthika.ingestion.parsers import select_parser
 from lak_arthika.models.price import PriceRecord
+from lak_arthika.quality import assess_price_records
 from lak_arthika.storage.prices import upsert_price_records
 
 
@@ -22,29 +23,7 @@ def validate_extracted_records(
 ) -> dict[str, object]:
     """Run publication-blocking validation checks."""
 
-    markets = sorted({record.market for record in records})
-    commodities = sorted({record.commodity for record in records})
-
-    checks = {
-        "has_at_least_50_records": len(records) >= 50,
-        "has_at_least_5_markets": len(markets) >= 5,
-        "has_at_least_10_commodities": len(commodities) >= 10,
-        "all_prices_are_positive": all(
-            record.price_min_lkr > 0 and record.price_max_lkr > 0 for record in records
-        ),
-        "all_ranges_are_ordered": all(
-            record.price_min_lkr <= record.price_max_lkr for record in records
-        ),
-    }
-
-    return {
-        "valid": all(checks.values()),
-        "record_count": len(records),
-        "market_count": len(markets),
-        "commodity_count": len(commodities),
-        "markets": markets,
-        "checks": checks,
-    }
+    return assess_price_records(records)
 
 
 def run_harti_daily_sync(
@@ -101,7 +80,8 @@ def process_downloaded_bulletin(
 ) -> dict[str, object]:
     """Extract, validate and store one preserved HARTI bulletin."""
 
-    records = extract_wholesale_vegetable_prices(downloaded)
+    parser = select_parser(downloaded)
+    records = parser.parse(downloaded)
     validation_report = validate_extracted_records(records)
 
     validation_report.update(
@@ -110,6 +90,7 @@ def process_downloaded_bulletin(
             "source_url": downloaded.source_url,
             "source_sha256": downloaded.sha256,
             "raw_pdf_path": str(downloaded.pdf_path),
+            "parser_version": parser.version,
         }
     )
 

@@ -1,0 +1,11 @@
+market_id,market_name,district,province,latitude,longitude,market_type
+peliyagoda,Peliyagoda,Gampaha,Western,6.9602,79.8800,wholesale
+kandy,Kandy,Kandy,Central,7.2906,80.6337,wholesale
+dambulla,Dambulla,Matale,Central,7.8742,80.6511,dedicated-economic-centre
+meegoda,Meegoda,Colombo,Western,6.8479,80.0150,dedicated-economic-centre
+norochcholai,Norochcholai,Puttalam,North Western,8.0330,79.8260,dedicated-economic-centre
+thambuththegama,Thambuththegama,Anuradhapura,North Central,8.1538,80.3007,dedicated-economic-centre
+keppetipola,Keppetipola,Badulla,Uva,6.8967,80.8592,dedicated-economic-centre
+nuwara-eliya,Nuwara Eliya,Nuwara Eliya,Central,6.9497,80.7891,wholesale
+bandarawela,Bandarawela,Badulla,Uva,6.8259,80.9982,wholesale
+veyangoda,Veyangoda,Gampaha,Western,7.1569,80.0958,dedicated-economic-centre
