@@ -17,6 +17,7 @@ from lak_arthika.pipelines.harti_historical import (
     process_downloaded_history,
 )
 from lak_arthika.storage.analytics import query_price_history, refresh_analytics
+from lak_arthika.storage.manifest import load_manifest
 
 app = typer.Typer(
     name="lak-arthika",
@@ -261,6 +262,28 @@ def query_harti_history(
         limit=limit,
     )
     typer.echo(json.dumps(rows, indent=2, default=str))
+
+
+@harti_app.command("status")
+def harti_status() -> None:
+    """Summarize the historical bulletin manifest and analytical store."""
+
+    settings = get_settings()
+    records = load_manifest(settings.harti_manifest_path)
+    counts = {
+        state: sum(record.status == state for record in records)
+        for state in ("processed", "quarantined", "failed", "downloaded", "discovered")
+    }
+    summary = {
+        "total_bulletins": len(records),
+        "processed_bulletins": counts["processed"],
+        "quarantined_bulletins": counts["quarantined"],
+        "failed_bulletins": counts["failed"],
+        "pending_bulletins": counts["downloaded"] + counts["discovered"],
+        "analytics_available": settings.harti_analytics_path.exists(),
+        "manifest_path": str(settings.harti_manifest_path),
+    }
+    typer.echo(json.dumps(summary, indent=2))
 
 
 if __name__ == "__main__":

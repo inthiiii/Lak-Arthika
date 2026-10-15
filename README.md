@@ -10,6 +10,7 @@ APIs and geospatial foundations for future forecasting and scenario simulation.
 - Phase 1A: one official HARTI bulletin to validated API records
 - Phase 1B: resumable historical data engine, quality quarantine, DuckDB analytics and
   map-ready market references
+- Phase 1C: interactive Sri Lanka market-price map and public evidence dashboard
 
 ## Requirements
 
@@ -64,6 +65,12 @@ uv run lak-arthika harti query \
   --from 2025-01-01
 ```
 
+Inspect ingestion health:
+
+```bash
+uv run lak-arthika harti status
+```
+
 ## Data architecture
 
 ```text
@@ -98,10 +105,46 @@ Useful endpoints:
 - `GET /v1/prices/latest`
 - `GET /v1/prices/history`
 - `GET /v1/prices/summary`
+- `GET /v1/catalog`
+- `GET /v1/map/prices`
 - `GET /v1/markets`
 - `GET /v1/markets/{market_id}/prices`
 - `GET /v1/data-quality/status`
 - Interactive documentation: <http://127.0.0.1:8000/docs>
+
+## Run the public dashboard
+
+The dashboard uses React, TypeScript, MapLibre and the FastAPI service. In a second
+terminal, after starting the API, run:
+
+```bash
+cd web
+corepack enable
+pnpm install
+cp .env.example .env.local
+pnpm dev
+```
+
+Open <http://127.0.0.1:5173>. Dashboard filter choices are stored in the URL so a
+specific commodity, date and region can be shared.
+
+The frontend is a pnpm project. Do not run `npm install` or `npm init` inside `web/`;
+mixing package managers can corrupt the pnpm-linked dependency tree.
+
+Run its automated checks with:
+
+```bash
+cd web
+pnpm lint
+pnpm typecheck
+pnpm test:run
+pnpm build
+pnpm exec playwright install chromium
+pnpm test:e2e
+```
+
+Browser tests intercept the API and map style with deterministic fixtures, so CI does not
+depend on HARTI availability, local historical data, or a third-party map-tile service.
 
 ## Run checks
 
