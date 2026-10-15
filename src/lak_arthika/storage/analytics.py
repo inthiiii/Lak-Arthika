@@ -165,3 +165,89 @@ def query_price_summary(
             parameters,
         )
         return _rows_as_dicts(cursor)
+
+
+def query_catalog(database_path: Path) -> tuple[list[str], date | None, date | None]:
+    """Return commodity choices and date coverage from the analytical store."""
+
+    with duckdb.connect(str(database_path), read_only=True) as connection:
+        commodities = [
+            row[0]
+            for row in connection.execute(
+                "SELECT DISTINCT commodity FROM prices ORDER BY commodity"
+            ).fetchall()
+        ]
+        coverage = connection.execute(
+            "SELECT min(observation_date), max(observation_date) FROM prices"
+        ).fetchone()
+    if coverage is None:
+        return commodities, None, None
+    minimum_date, maximum_date = coverage
+    return commodities, minimum_date, maximum_date
+
+
+def query_market_price_points(
+    *,
+    database_path: Path,
+    commodity: str,
+    observation_date: date | None = None,
+) -> list[dict[str, object]]:
+    """Return one current and previous price per geocoded market."""
+
+    date_clause = "AND observation_date <= ?" if observation_date else ""
+    parameters: list[object] = [commodity.strip()]
+    if observation_date:
+        parameters.append(observation_date)
+
+    with duckdb.connect(str(database_path), read_only=True) as connection:
+        cursor = connection.execute(
+            f"""
+            WITH filtered AS (
+                SELECT
+                    *,
+                    lag(price_midpoint_lkr) OVER (
+                        PARTITION BY market, commodity
+                        ORDER BY observation_date
+                    ) AS previous_price_lkr
+                FROM price_history
+                WHERE lower(commodity) = lower(?)
+                {date_clause}
+            ),
+            ranked AS (
+                SELECT
+                    *,
+                    row_number() OVER (
+                        PARTITION BY market, commodity
+                        ORDER BY observation_date DESC
+                    ) AS recency_rank
+                FROM filtered
+            )
+            SELECT
+                market_id,
+                market AS market_name,
+                district,
+                province,
+                latitude,
+                longitude,
+                commodity,
+                category,
+                price_min_lkr AS minimum_price_lkr,
+                price_max_lkr AS maximum_price_lkr,
+                price_midpoint_lkr AS midpoint_price_lkr,
+                previous_price_lkr,
+                CASE
+                    WHEN previous_price_lkr IS NULL OR previous_price_lkr = 0 THEN NULL
+                    ELSE round(
+                        ((price_midpoint_lkr - previous_price_lkr) / previous_price_lkr) * 100,
+                        2
+                    )
+                END AS change_percentage,
+                observation_date,
+                source_url
+            FROM ranked
+            WHERE recency_rank = 1 AND market_id IS NOT NULL
+            ORDER BY market_name
+            """,
+            parameters,
+        )
+        return _rows_as_dicts(cursor)
