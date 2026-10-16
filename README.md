@@ -13,6 +13,8 @@ APIs and geospatial foundations for future forecasting and scenario simulation.
 - Phase 1C: interactive Sri Lanka market-price map and public evidence dashboard
 - Phase 2 / engine-v1: leakage-safe 7, 14 and 30-day forecasts, rolling backtests,
   uncertainty intervals and versioned model artifacts
+- Phase 2B: point-in-time weather/economic signals, champion–challenger promotion,
+  experiment registry, drift/freshness health and public model monitoring
 
 ## Requirements
 
@@ -84,6 +86,28 @@ uv run lak-arthika forecast train --version forecast-v1
 uv run lak-arthika forecast status
 ```
 
+Sync official NASA POWER weather signals for every market coordinate:
+
+```bash
+uv run lak-arthika signals sync-weather --from 2024-12-01 --to 2026-10-07
+uv run lak-arthika signals status
+```
+
+Import a reviewed CBSL or Ceypetco extract using
+`data/reference/external_signal_template.csv`:
+
+```bash
+uv run lak-arthika signals import-official exchange-rates.csv --source cbsl
+uv run lak-arthika signals import-official fuel-prices.csv --source ceypetco
+```
+
+Train a challenger. It is promoted only when it beats the strongest baseline at all horizons:
+
+```bash
+uv run lak-arthika forecast train --version external-signals-v1
+uv run lak-arthika forecast health
+```
+
 Generated model files remain outside Git under `models/forecasting/`. The API refuses to
 serve forecasts until a complete version is promoted through `current.json`.
 
@@ -129,6 +153,7 @@ Useful endpoints:
 - `GET /v1/forecasts`
 - `GET /v1/forecasts/quality`
 - `GET /v1/models/current`
+- `GET /v1/models/health`
 - Interactive documentation: <http://127.0.0.1:8000/docs>
 
 ## Run the public dashboard

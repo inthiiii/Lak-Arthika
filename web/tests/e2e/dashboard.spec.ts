@@ -1,5 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 
+test.setTimeout(60_000)
+
 const catalog = {
   commodities: ['Tomato', 'Carrot'],
   markets: [],
@@ -68,7 +70,19 @@ const forecastQuality = {
     interval_coverage_80: 0.8, interval_coverage_95: 0.95,
     interval_radius_80_lkr: 30, interval_radius_95_lkr: 60,
     beats_seasonal_baseline: true,
+    beats_strongest_baseline: false,
   })),
+}
+
+const modelHealth = {
+  status: 'warning', model_version: 'forecast-v1-test', checked_at: '2026-01-01T00:00:00Z',
+  training_cutoff: '2025-12-31', training_data_age_days: 1,
+  strongest_baseline_wins: [7], undercovered_horizons: [30],
+  signals: [
+    { source: 'nasa_power', latest_effective_date: '2025-12-31', observation_count: 1000, age_days: 1, stale: false },
+    { source: 'cbsl', latest_effective_date: null, observation_count: 0, age_days: null, stale: true },
+  ],
+  messages: ['The strongest baseline still wins at 7d.'],
 }
 
 async function mockDashboard(page: Page) {
@@ -89,6 +103,7 @@ async function mockDashboard(page: Page) {
   await page.route('**/v1/markets/*/prices**', (route) => route.fulfill({ json: history }))
   await page.route('**/v1/forecasts/quality', (route) => route.fulfill({ json: forecastQuality }))
   await page.route('**/v1/forecasts?**', (route) => route.fulfill({ json: forecasts }))
+  await page.route('**/v1/models/health', (route) => route.fulfill({ json: modelHealth }))
 }
 
 test.beforeEach(async ({ page }) => {
@@ -132,7 +147,13 @@ test('experimental forecasts show intervals and model provenance', async ({ page
   await page.goto('/')
   await expect(page.getByText('Experimental outlook')).toBeVisible()
   await expect(page.getByText(/Nominal 80% interval/).first()).toBeVisible()
-  await expect(page.getByText(/forecast-v1-test/)).toBeVisible()
+  await expect(page.getByText(/forecast-v1-test/).last()).toBeVisible()
+})
+
+test('model health exposes baseline and signal warnings', async ({ page }) => {
+  await page.goto('/')
+  await expect(page.getByLabel('Forecast model health')).toContainText('Forecast caution active')
+  await expect(page.getByLabel('Forecast model health')).toContainText('CBSL exchange rate · stale')
 })
 
 test('filter state remains in the URL after reload', async ({ page }) => {

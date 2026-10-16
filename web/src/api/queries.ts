@@ -5,6 +5,7 @@ import type {
   ForecastQuality,
   ForecastRecord,
   MarketPricePoint,
+  ModelHealth,
   PriceHistoryRecord,
   QualityStatus,
 } from './types'
@@ -76,6 +77,15 @@ export function useForecastQuality() {
     queryFn: ({ signal }) =>
       apiGet<ForecastQuality>('/v1/forecasts/quality', undefined, signal),
     staleTime: 10 * 60 * 1000,
+    retry: false,
+  })
+}
+
+export function useModelHealth() {
+  return useQuery({
+    queryKey: ['model-health'],
+    queryFn: ({ signal }) => apiGet<ModelHealth>('/v1/models/health', undefined, signal),
+    staleTime: 60 * 1000,
     retry: false,
   })
 }

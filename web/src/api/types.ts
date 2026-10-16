@@ -86,12 +86,33 @@ export interface HorizonQuality {
   interval_radius_80_lkr: number
   interval_radius_95_lkr: number
   beats_seasonal_baseline: boolean
+  beats_strongest_baseline: boolean
 }
 
 export interface ForecastQuality {
   model_version: string
   evaluated_at: string
   horizons: HorizonQuality[]
+}
+
+export interface SignalFreshness {
+  source: string
+  latest_effective_date: string | null
+  observation_count: number
+  age_days: number | null
+  stale: boolean
+}
+
+export interface ModelHealth {
+  status: 'healthy' | 'warning' | 'blocked'
+  model_version: string | null
+  checked_at: string
+  training_cutoff: string | null
+  training_data_age_days: number | null
+  strongest_baseline_wins: number[]
+  undercovered_horizons: number[]
+  signals: SignalFreshness[]
+  messages: string[]
 }
 
 export type Direction = 'all' | 'rising' | 'stable' | 'falling'

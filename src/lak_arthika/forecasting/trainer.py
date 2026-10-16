@@ -32,6 +32,9 @@ from lak_arthika.models.forecast import (
     HorizonQuality,
     ModelMetadata,
 )
+from lak_arthika.models.signals import PromotionDecision
+from lak_arthika.signals.features import SignalIndex
+from lak_arthika.storage.signals import load_signals
 
 HORIZONS: tuple[Literal[7, 14, 30], ...] = (7, 14, 30)
 MODEL_TYPE = "global-hist-gradient-boosting-direct-residual"
@@ -99,17 +102,23 @@ def _evaluate_horizon(
         raise ValueError(f"Insufficient interval evaluation rows for {horizon}-day horizon")
     radius_80 = _quantile(residuals[calibration_indices], 0.8)
     radius_95 = _quantile(residuals[calibration_indices], 0.95)
+    baseline_metrics = {
+        name: regression_metrics(actual, values, current=current)
+        for name, values in baselines.items()
+    }
+    model_metrics = regression_metrics(
+        actual, predicted, naive=baselines["seasonal_naive"], current=current
+    )
+    model_mae = float(model_metrics["mae"] or 0)
+    strongest_baseline_mae = min(
+        float(metrics["mae"] or float("inf")) for metrics in baseline_metrics.values()
+    )
     quality = HorizonQuality(
         horizon_days=horizon,
         samples=len(actual),
         folds=len(folds),
-        model_metrics=regression_metrics(
-            actual, predicted, naive=baselines["seasonal_naive"], current=current
-        ),
-        baseline_metrics={
-            name: regression_metrics(actual, values, current=current)
-            for name, values in baselines.items()
-        },
+        model_metrics=model_metrics,
+        baseline_metrics=baseline_metrics,
         interval_coverage_80=interval_coverage(
             actual[evaluation_indices], predicted[evaluation_indices], radius_80
         ),
@@ -118,16 +127,20 @@ def _evaluate_horizon(
         ),
         interval_radius_80_lkr=radius_80,
         interval_radius_95_lkr=radius_95,
-        beats_seasonal_baseline=(
-            float(regression_metrics(actual, predicted)["mae"] or 0)
-            < float(regression_metrics(actual, baselines["seasonal_naive"])["mae"] or 0)
-        ),
+        beats_seasonal_baseline=(model_mae < float(baseline_metrics["seasonal_naive"]["mae"] or 0)),
+        beats_strongest_baseline=model_mae < strongest_baseline_mae,
     )
     return quality, residuals
 
 
 def train_forecasting_engine(
-    *, database_path: Path, model_root: Path, model_version: str, cutoff: date | None = None
+    *,
+    database_path: Path,
+    model_root: Path,
+    model_version: str,
+    cutoff: date | None = None,
+    signals_path: Path | None = None,
+    force_promote: bool = False,
 ) -> ModelMetadata:
     """Train all direct horizons and promote a complete artifact bundle."""
 
@@ -140,10 +153,14 @@ def train_forecasting_engine(
     models: dict[int, HistGradientBoostingRegressor] = {}
     qualities: list[HorizonQuality] = []
     forecast_records: list[ForecastRecord] = []
+    signal_index = SignalIndex(load_signals(signals_path)) if signals_path else None
 
     for horizon in HORIZONS:
         rows, mappings = build_supervised_rows(
-            observations, horizon_days=horizon, mappings=mappings
+            observations,
+            horizon_days=horizon,
+            mappings=mappings,
+            signal_index=signal_index,
         )
         quality, _ = _evaluate_horizon(rows, horizon, random_state=42 + horizon)
         qualities.append(quality)
@@ -152,7 +169,10 @@ def train_forecasting_engine(
         model.fit(matrix(rows), targets(rows) - training_current)
         models[horizon] = model
         prediction_rows = build_prediction_rows(
-            observations, horizon_days=horizon, mappings=mappings
+            observations,
+            horizon_days=horizon,
+            mappings=mappings,
+            signal_index=signal_index,
         )
         prediction_current = np.asarray([row.current_price_lkr for row in prediction_rows])
         predictions = prediction_current + model.predict(matrix(prediction_rows))
@@ -197,7 +217,7 @@ def train_forecasting_engine(
         intended_use="Experimental wholesale price decision support for Sri Lankan markets.",
         limitations=[
             "Forecasts inherit gaps and reporting errors in HARTI bulletins.",
-            "The model currently uses historical price and calendar signals only.",
+            "External signals may be missing, stale, or revised by their publishers.",
             "Intervals are empirical backtest intervals, not guarantees.",
             "Not suitable for automated trading, procurement, or policy decisions without review.",
         ],
@@ -228,7 +248,33 @@ def train_forecasting_engine(
     )
     (version_dir / "model_card.md").write_text(_model_card(metadata, quality_report))
     model_root.mkdir(parents=True, exist_ok=True)
-    (model_root / "current.json").write_text(json.dumps({"model_version": model_version}, indent=2))
+    beating_horizons = [
+        int(item.horizon_days) for item in qualities if item.beats_strongest_baseline
+    ]
+    promoted = force_promote or len(beating_horizons) == len(HORIZONS)
+    decision = PromotionDecision(
+        candidate_version=model_version,
+        evaluated_at=trained_at,
+        promoted=promoted,
+        forced=force_promote,
+        required_horizons=list(HORIZONS),
+        horizons_beating_strongest_baseline=beating_horizons,
+        reasons=(
+            ["Candidate beat the strongest registered baseline at every horizon."]
+            if len(beating_horizons) == len(HORIZONS)
+            else [
+                "Candidate did not beat the strongest baseline at every horizon; "
+                "the existing champion remains active."
+            ]
+        ),
+    )
+    (version_dir / "promotion.json").write_text(decision.model_dump_json(indent=2))
+    with (model_root / "experiments.jsonl").open("a") as registry:
+        registry.write(decision.model_dump_json() + "\n")
+    if promoted:
+        (model_root / "current.json").write_text(
+            json.dumps({"model_version": model_version}, indent=2)
+        )
     return metadata
 
 
@@ -256,6 +302,10 @@ def _model_card(metadata: ModelMetadata, quality: ForecastQuality) -> str:
             "## Limitations",
             "",
             *[f"- {item}" for item in metadata.limitations],
+            "",
+            "## Promotion rule",
+            "",
+            "Promotion requires lower MAE than every registered baseline at all horizons.",
             "",
         ]
     )

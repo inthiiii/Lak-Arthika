@@ -137,6 +137,7 @@ def test_training_publishes_a_complete_versioned_bundle(
         database_path=database_path,
         model_root=model_root,
         model_version="test-v1",
+        force_promote=True,
     )
 
     assert metadata.horizons == [7, 14, 30]
@@ -148,5 +149,6 @@ def test_training_publishes_a_complete_versioned_bundle(
         "forecasts.json",
         "feature_schema.json",
         "model_card.md",
+        "promotion.json",
     ):
         assert (model_root / "test-v1" / filename).exists()

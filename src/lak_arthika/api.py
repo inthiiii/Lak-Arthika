@@ -12,11 +12,13 @@ from pydantic import BaseModel
 from lak_arthika import __version__
 from lak_arthika.config import get_settings
 from lak_arthika.forecasting.artifacts import load_forecasts, load_metadata, load_quality
+from lak_arthika.forecasting.health import assess_model_health
 from lak_arthika.models.forecast import ForecastQuality, ForecastRecord, ModelMetadata
 from lak_arthika.models.manifest import BulletinManifestRecord
 from lak_arthika.models.market import CatalogResponse, MarketPricePoint, MarketReference
 from lak_arthika.models.price import PriceRecord
 from lak_arthika.models.quality import QualityStatus
+from lak_arthika.models.signals import ModelHealth
 from lak_arthika.storage.analytics import (
     query_catalog,
     query_market_price_points,
@@ -134,6 +136,7 @@ def create_app(
     application.state.markets_reference_path = markets_path or settings.markets_reference_path
     application.state.harti_manifest_path = manifest_path or settings.harti_manifest_path
     application.state.forecast_model_root = forecast_root or settings.forecast_model_root
+    application.state.external_signals_path = settings.external_signals_path
 
     @application.get(
         "/health",
@@ -387,6 +390,15 @@ def create_app(
             return load_metadata(Path(request.app.state.forecast_model_root))
         except FileNotFoundError as error:
             raise HTTPException(status_code=503, detail="No forecast model is promoted.") from error
+
+    @application.get("/v1/models/health", response_model=ModelHealth, tags=["Forecasting"])
+    def model_health(request: Request) -> ModelHealth:
+        """Return champion quality, calibration, freshness and signal health."""
+
+        return assess_model_health(
+            model_root=Path(request.app.state.forecast_model_root),
+            signals_path=Path(request.app.state.external_signals_path),
+        )
 
     return application
 

@@ -5,11 +5,14 @@ from datetime import date
 from pathlib import Path
 from typing import Annotated
 
+import httpx
+import polars as pl
 import typer
 
 from lak_arthika import __version__
 from lak_arthika.config import get_settings
 from lak_arthika.forecasting.artifacts import load_metadata, load_quality
+from lak_arthika.forecasting.health import assess_model_health
 from lak_arthika.forecasting.trainer import train_forecasting_engine
 from lak_arthika.pipelines.harti_daily import run_harti_daily_sync, run_harti_file_sync
 from lak_arthika.pipelines.harti_historical import (
@@ -18,8 +21,11 @@ from lak_arthika.pipelines.harti_historical import (
     ingest_local_historical_bulletin,
     process_downloaded_history,
 )
+from lak_arthika.signals.importers import import_official_csv
+from lak_arthika.signals.nasa_power import fetch_power_signals
 from lak_arthika.storage.analytics import query_price_history, refresh_analytics
 from lak_arthika.storage.manifest import load_manifest
+from lak_arthika.storage.signals import load_signals, store_signals
 
 app = typer.Typer(
     name="lak-arthika",
@@ -39,6 +45,12 @@ forecast_app = typer.Typer(
     no_args_is_help=True,
 )
 app.add_typer(forecast_app, name="forecast")
+
+signals_app = typer.Typer(
+    help="Ingest provenance-backed weather and economic signals.",
+    no_args_is_help=True,
+)
+app.add_typer(signals_app, name="signals")
 
 
 def _parse_date(value: str, *, option_name: str) -> date:
@@ -300,6 +312,13 @@ def train_forecast(
     cutoff: Annotated[
         str | None, typer.Option("--cutoff", help="Optional YYYY-MM-DD cutoff.")
     ] = None,
+    force_promote: Annotated[
+        bool,
+        typer.Option(
+            "--force-promote",
+            help="Override the champion gate after explicit review.",
+        ),
+    ] = False,
 ) -> None:
     """Train, backtest, package and promote forecasting-engine-v1."""
 
@@ -309,6 +328,8 @@ def train_forecast(
         model_root=settings.forecast_model_root,
         model_version=version,
         cutoff=_parse_date(cutoff, option_name="--cutoff") if cutoff else None,
+        signals_path=settings.external_signals_path,
+        force_promote=force_promote,
     )
     typer.echo(metadata.model_dump_json(indent=2))
 
@@ -328,6 +349,80 @@ def forecast_status() -> None:
             "No promoted forecast exists. Run `lak-arthika forecast train --version forecast-v1`."
         ) from error
     typer.echo(json.dumps(payload, indent=2))
+
+
+@forecast_app.command("health")
+def forecast_health() -> None:
+    """Assess champion performance, calibration and upstream freshness."""
+
+    settings = get_settings()
+    health = assess_model_health(
+        model_root=settings.forecast_model_root,
+        signals_path=settings.external_signals_path,
+    )
+    typer.echo(health.model_dump_json(indent=2))
+
+
+@signals_app.command("sync-weather")
+def sync_weather(
+    start: Annotated[str, typer.Option("--from", help="First date (YYYY-MM-DD).")],
+    end: Annotated[str, typer.Option("--to", help="Last date (YYYY-MM-DD).")],
+) -> None:
+    """Fetch NASA POWER rainfall, temperature and humidity for every market."""
+
+    settings = get_settings()
+    start_date = _parse_date(start, option_name="--from")
+    end_date = _parse_date(end, option_name="--to")
+    if start_date > end_date:
+        raise typer.BadParameter("--from must be on or before --to")
+    markets = pl.read_csv(settings.markets_reference_path).to_dicts()
+    records = []
+    with httpx.Client(timeout=60.0, follow_redirects=True) as client:
+        for market in markets:
+            records.extend(
+                fetch_power_signals(
+                    market_id=str(market["market_id"]),
+                    latitude=float(market["latitude"]),
+                    longitude=float(market["longitude"]),
+                    start=start_date,
+                    end=end_date,
+                    client=client,
+                )
+            )
+    inserted = store_signals(records, settings.external_signals_path)
+    typer.echo(json.dumps({"downloaded": len(records), "inserted": inserted}, indent=2))
+
+
+@signals_app.command("import-official")
+def import_official_signals(
+    csv_path: Annotated[Path, typer.Argument(exists=True, dir_okay=False, resolve_path=True)],
+    source: Annotated[str, typer.Option("--source", help="cbsl or ceypetco")],
+) -> None:
+    """Import a reviewed normalized CBSL or Ceypetco CSV extract."""
+
+    settings = get_settings()
+    records = import_official_csv(csv_path, source=source)
+    inserted = store_signals(records, settings.external_signals_path)
+    typer.echo(json.dumps({"read": len(records), "inserted": inserted}, indent=2))
+
+
+@signals_app.command("status")
+def signal_status() -> None:
+    """Summarize the local external-signal feature store."""
+
+    settings = get_settings()
+    records = load_signals(settings.external_signals_path)
+    by_source = {
+        source: {
+            "records": len([item for item in records if item.source == source]),
+            "latest_effective_date": max(
+                (item.effective_date for item in records if item.source == source),
+                default=None,
+            ),
+        }
+        for source in ("nasa_power", "cbsl", "ceypetco")
+    }
+    typer.echo(json.dumps(by_source, indent=2, default=str))
 
 
 if __name__ == "__main__":

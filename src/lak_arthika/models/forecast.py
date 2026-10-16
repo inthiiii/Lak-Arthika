@@ -56,6 +56,7 @@ class HorizonQuality(BaseModel):
     interval_radius_80_lkr: float
     interval_radius_95_lkr: float
     beats_seasonal_baseline: bool
+    beats_strongest_baseline: bool = False
 
 
 class ForecastQuality(BaseModel):
