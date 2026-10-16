@@ -12,7 +12,9 @@ import duckdb
 import numpy as np
 from numpy.typing import NDArray
 
-FEATURE_VERSION = "price-features-v1"
+from lak_arthika.signals.features import EXTERNAL_FEATURE_NAMES, SignalIndex
+
+FEATURE_VERSION = "price-and-external-signals-v2"
 MIN_HISTORY = 28
 FEATURE_NAMES = (
     "current_price",
@@ -33,6 +35,7 @@ FEATURE_NAMES = (
     "month",
     "market_code",
     "commodity_code",
+    *EXTERNAL_FEATURE_NAMES,
 )
 
 
@@ -136,6 +139,7 @@ def _values(
     observations: list[PriceObservation],
     index: int,
     mappings: FeatureMappings,
+    signal_index: SignalIndex | None = None,
 ) -> tuple[float, ...]:
     current = observations[index]
     prices = [item.price_midpoint_lkr for item in observations]
@@ -148,7 +152,7 @@ def _values(
     prior_14 = prices[index - 14 : index]
     prior_28 = prices[index - 28 : index]
     iso_calendar = current.observation_date.isocalendar()
-    return (
+    base_values = (
         current.price_midpoint_lkr,
         lag(1),
         lag(2),
@@ -168,6 +172,12 @@ def _values(
         float(mappings.markets.get(current.market_id, -1)),
         float(mappings.commodities.get(current.commodity, -1)),
     )
+    external_values = (
+        signal_index.features_for(current.market_id, current.observation_date)
+        if signal_index
+        else (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 999.0, 999.0, 999.0, 0.0, 0.0)
+    )
+    return (*base_values, *external_values)
 
 
 def build_supervised_rows(
@@ -176,6 +186,7 @@ def build_supervised_rows(
     horizon_days: int,
     mappings: FeatureMappings | None = None,
     minimum_history: int = MIN_HISTORY,
+    signal_index: SignalIndex | None = None,
 ) -> tuple[list[FeatureRow], FeatureMappings]:
     """Build direct-horizon rows whose targets exist on the exact future date."""
 
@@ -201,7 +212,7 @@ def build_supervised_rows(
                     commodity=current.commodity,
                     category=current.category,
                     current_price_lkr=current.price_midpoint_lkr,
-                    values=_values(values, index, resolved_mappings),
+                    values=_values(values, index, resolved_mappings, signal_index),
                     target=target,
                 )
             )
@@ -214,6 +225,7 @@ def build_prediction_rows(
     horizon_days: int,
     mappings: FeatureMappings,
     minimum_history: int = MIN_HISTORY,
+    signal_index: SignalIndex | None = None,
 ) -> list[FeatureRow]:
     """Build one latest feature row for each sufficiently long series."""
 
@@ -232,7 +244,7 @@ def build_prediction_rows(
                 commodity=current.commodity,
                 category=current.category,
                 current_price_lkr=current.price_midpoint_lkr,
-                values=_values(values, index, mappings),
+                values=_values(values, index, mappings, signal_index),
             )
         )
     return rows

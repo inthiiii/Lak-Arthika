@@ -4,12 +4,14 @@ import { DashboardHeader } from './components/DashboardHeader'
 import { FilterPanel } from './components/FilterPanel'
 import { PriceSummary } from './components/PriceSummary'
 import { QualityBanner } from './components/QualityBanner'
+import { ModelHealthPanel } from './components/ModelHealthPanel'
 import {
   useCatalog,
   useForecastQuality,
   useForecasts,
   useMapPrices,
   useMarketHistory,
+  useModelHealth,
   useQualityStatus,
 } from './api/queries'
 import { useDashboardFilters } from './hooks/useDashboardFilters'
@@ -81,6 +83,7 @@ function App() {
   )
   const forecasts = useForecasts(effectiveSelectedMarketId, commodity)
   const forecastQuality = useForecastQuality()
+  const modelHealth = useModelHealth()
 
   const loading = catalog.isLoading || prices.isLoading
   const error = catalog.error ?? prices.error
@@ -101,6 +104,7 @@ function App() {
         </section>
 
         <QualityBanner quality={quality.data} isLoading={quality.isLoading} />
+        <ModelHealthPanel health={modelHealth.data} isLoading={modelHealth.isLoading} />
         <FilterPanel
           catalog={catalog.data}
           filters={{ ...filters, commodity, date: selectedDate }}

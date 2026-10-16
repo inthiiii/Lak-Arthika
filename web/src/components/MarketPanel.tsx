@@ -148,9 +148,9 @@ export function MarketPanel({
                         ? '—'
                         : formatLkr(quality.model_metrics.mae)}
                     </small>
-                    <small>{quality?.beats_seasonal_baseline
-                      ? 'Beat seasonal baseline'
-                      : 'Did not beat seasonal baseline'}</small>
+                    <small>{quality?.beats_strongest_baseline
+                      ? 'Passed strongest-baseline gate'
+                      : 'Strongest baseline still leads'}</small>
                     {quality && <small>
                       Observed interval coverage {(quality.interval_coverage_80 * 100).toFixed(0)}%
                     </small>}
