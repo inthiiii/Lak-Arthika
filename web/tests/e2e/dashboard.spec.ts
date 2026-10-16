@@ -50,6 +50,27 @@ const history = [
   },
 ]
 
+const forecasts = [7, 14, 30].map((horizon) => ({
+  market_id: 'dambulla', market_name: 'Dambulla', commodity: 'Tomato', category: 'Vegetable',
+  generated_at: '2026-01-01T00:00:00Z', origin_date: '2025-12-31',
+  training_cutoff: '2025-12-31', forecast_date: `2026-01-${horizon === 7 ? '07' : horizon}`,
+  horizon_days: horizon, point_forecast_lkr: 300 + horizon, lower_80_lkr: 280,
+  upper_80_lkr: 340, lower_95_lkr: 260, upper_95_lkr: 360,
+  model_version: 'forecast-v1-test', feature_version: 'price-features-v1',
+  model_type: 'test', experimental: true,
+}))
+
+const forecastQuality = {
+  model_version: 'forecast-v1-test', evaluated_at: '2026-01-01T00:00:00Z',
+  horizons: [7, 14, 30].map((horizon) => ({
+    horizon_days: horizon, samples: 100, folds: 3,
+    model_metrics: { mae: 24 }, baseline_metrics: { seasonal_naive: { mae: 30 } },
+    interval_coverage_80: 0.8, interval_coverage_95: 0.95,
+    interval_radius_80_lkr: 30, interval_radius_95_lkr: 60,
+    beats_seasonal_baseline: true,
+  })),
+}
+
 async function mockDashboard(page: Page) {
   await page.route('**/styles/bright', (route) => route.fulfill({
     contentType: 'application/json',
@@ -66,6 +87,8 @@ async function mockDashboard(page: Page) {
     return route.fulfill({ json: prices(commodity) })
   })
   await page.route('**/v1/markets/*/prices**', (route) => route.fulfill({ json: history }))
+  await page.route('**/v1/forecasts/quality', (route) => route.fulfill({ json: forecastQuality }))
+  await page.route('**/v1/forecasts?**', (route) => route.fulfill({ json: forecasts }))
 }
 
 test.beforeEach(async ({ page }) => {
@@ -103,6 +126,13 @@ test('the selected market displays a historical chart', async ({ page }) => {
   await page.goto('/')
   await expect(page.getByLabel('Historical price chart for Dambulla')).toBeVisible()
   await expect(page.getByText('2 observations')).toBeVisible()
+})
+
+test('experimental forecasts show intervals and model provenance', async ({ page }) => {
+  await page.goto('/')
+  await expect(page.getByText('Experimental outlook')).toBeVisible()
+  await expect(page.getByText(/Nominal 80% interval/).first()).toBeVisible()
+  await expect(page.getByText(/forecast-v1-test/)).toBeVisible()
 })
 
 test('filter state remains in the URL after reload', async ({ page }) => {

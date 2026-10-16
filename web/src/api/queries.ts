@@ -1,6 +1,13 @@
 import { useQuery } from '@tanstack/react-query'
 import { apiGet } from './client'
-import type { Catalog, MarketPricePoint, PriceHistoryRecord, QualityStatus } from './types'
+import type {
+  Catalog,
+  ForecastQuality,
+  ForecastRecord,
+  MarketPricePoint,
+  PriceHistoryRecord,
+  QualityStatus,
+} from './types'
 
 export function useCatalog() {
   return useQuery({
@@ -45,5 +52,30 @@ export function useMarketHistory(
     enabled: Boolean(marketId && commodity),
     staleTime: 60 * 1000,
     select: (rows) => [...rows].reverse(),
+  })
+}
+
+export function useForecasts(marketId: string | null, commodity: string) {
+  return useQuery({
+    queryKey: ['forecasts', marketId, commodity],
+    queryFn: ({ signal }) =>
+      apiGet<ForecastRecord[]>(
+        '/v1/forecasts',
+        { market_id: marketId ?? undefined, commodity },
+        signal,
+      ),
+    enabled: Boolean(marketId && commodity),
+    staleTime: 10 * 60 * 1000,
+    retry: false,
+  })
+}
+
+export function useForecastQuality() {
+  return useQuery({
+    queryKey: ['forecast-quality'],
+    queryFn: ({ signal }) =>
+      apiGet<ForecastQuality>('/v1/forecasts/quality', undefined, signal),
+    staleTime: 10 * 60 * 1000,
+    retry: false,
   })
 }

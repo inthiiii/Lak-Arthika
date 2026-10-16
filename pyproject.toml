@@ -9,10 +9,13 @@ dependencies = [
     "duckdb>=1.4.1",
     "fastapi",
     "httpx>=0.28.1",
+    "joblib>=1.6.0",
+    "numpy>=2.5.4",
     "polars>=2.0.0",
     "pydantic-settings",
     "pymupdf>=1.28.2",
     "pytz>=2025.2",
+    "scikit-learn>=1.9.1",
     "structlog",
     "typer",
     "uvicorn[standard]",
@@ -23,6 +26,7 @@ lak-arthika = "lak_arthika.cli:app"
 
 [dependency-groups]
 dev = [
+    "hypothesis>=6.170.0",
     "mypy",
     "pre-commit",
     "pytest",
@@ -69,5 +73,5 @@ strict = true
 packages = ["lak_arthika"]
 
 [[tool.mypy.overrides]]
-module = ["duckdb", "pymupdf"]
+module = ["duckdb", "joblib", "pymupdf", "sklearn.*"]
 ignore_missing_imports = true

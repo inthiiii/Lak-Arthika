@@ -11,6 +11,8 @@ from pydantic import BaseModel
 
 from lak_arthika import __version__
 from lak_arthika.config import get_settings
+from lak_arthika.forecasting.artifacts import load_forecasts, load_metadata, load_quality
+from lak_arthika.models.forecast import ForecastQuality, ForecastRecord, ModelMetadata
 from lak_arthika.models.manifest import BulletinManifestRecord
 from lak_arthika.models.market import CatalogResponse, MarketPricePoint, MarketReference
 from lak_arthika.models.price import PriceRecord
@@ -106,6 +108,7 @@ def create_app(
     analytics_path: Path | None = None,
     markets_path: Path | None = None,
     manifest_path: Path | None = None,
+    forecast_root: Path | None = None,
 ) -> FastAPI:
     """Create and configure the FastAPI application."""
 
@@ -130,6 +133,7 @@ def create_app(
     application.state.harti_analytics_path = analytics_path or settings.harti_analytics_path
     application.state.markets_reference_path = markets_path or settings.markets_reference_path
     application.state.harti_manifest_path = manifest_path or settings.harti_manifest_path
+    application.state.forecast_model_root = forecast_root or settings.forecast_model_root
 
     @application.get(
         "/health",
@@ -335,6 +339,54 @@ def create_app(
 
         records = load_manifest(Path(request.app.state.harti_manifest_path))
         return quality_status(records)
+
+    @application.get("/v1/forecasts", response_model=list[ForecastRecord], tags=["Forecasting"])
+    def forecasts(
+        request: Request,
+        market_id: str | None = None,
+        commodity: str | None = None,
+        horizon_days: int | None = Query(default=None),
+    ) -> list[ForecastRecord]:
+        """Return promoted experimental forecasts with calibrated intervals."""
+
+        if horizon_days is not None and horizon_days not in {7, 14, 30}:
+            raise HTTPException(status_code=422, detail="horizon_days must be 7, 14, or 30.")
+        try:
+            records = load_forecasts(Path(request.app.state.forecast_model_root))
+        except FileNotFoundError as error:
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "No promoted forecast model is available. Run the forecast training command."
+                ),
+            ) from error
+        return [
+            record
+            for record in records
+            if (market_id is None or record.market_id == market_id)
+            and (commodity is None or record.commodity.casefold() == commodity.casefold())
+            and (horizon_days is None or record.horizon_days == horizon_days)
+        ]
+
+    @application.get("/v1/forecasts/quality", response_model=ForecastQuality, tags=["Forecasting"])
+    def forecast_quality(request: Request) -> ForecastQuality:
+        """Return honest out-of-time performance and baseline comparisons."""
+
+        try:
+            return load_quality(Path(request.app.state.forecast_model_root))
+        except FileNotFoundError as error:
+            raise HTTPException(
+                status_code=503, detail="Forecast quality is not available."
+            ) from error
+
+    @application.get("/v1/models/current", response_model=ModelMetadata, tags=["Forecasting"])
+    def current_model(request: Request) -> ModelMetadata:
+        """Return provenance and limitations for the promoted model."""
+
+        try:
+            return load_metadata(Path(request.app.state.forecast_model_root))
+        except FileNotFoundError as error:
+            raise HTTPException(status_code=503, detail="No forecast model is promoted.") from error
 
     return application
 
