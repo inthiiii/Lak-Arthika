@@ -4,7 +4,14 @@ import { DashboardHeader } from './components/DashboardHeader'
 import { FilterPanel } from './components/FilterPanel'
 import { PriceSummary } from './components/PriceSummary'
 import { QualityBanner } from './components/QualityBanner'
-import { useCatalog, useMapPrices, useMarketHistory, useQualityStatus } from './api/queries'
+import {
+  useCatalog,
+  useForecastQuality,
+  useForecasts,
+  useMapPrices,
+  useMarketHistory,
+  useQualityStatus,
+} from './api/queries'
 import { useDashboardFilters } from './hooks/useDashboardFilters'
 import type { MarketPricePoint } from './api/types'
 import './App.css'
@@ -72,6 +79,8 @@ function App() {
     historyStart,
     selectedDate || undefined,
   )
+  const forecasts = useForecasts(effectiveSelectedMarketId, commodity)
+  const forecastQuality = useForecastQuality()
 
   const loading = catalog.isLoading || prices.isLoading
   const error = catalog.error ?? prices.error
@@ -128,6 +137,9 @@ function App() {
                   point={selectedPoint}
                   history={history.data ?? []}
                   isLoading={history.isLoading}
+                  forecasts={forecasts.data ?? []}
+                  forecastQuality={forecastQuality.data}
+                  forecastUnavailable={forecasts.isError || forecastQuality.isError}
                 />
               </section>
             </Suspense>
@@ -139,9 +151,9 @@ function App() {
           <div>
             <h2>Read the signal, not a promise.</h2>
             <p>
-              LakArthika currently reports historical wholesale price ranges published by
-              HARTI. It does not represent retail prices or a government forecast. Source
-              documents remain linked for verification.
+              LakArthika reports historical HARTI wholesale prices and clearly labelled
+              experimental forecasts. These are decision-support signals—not retail prices,
+              guarantees, or official government forecasts. Evidence remains linked.
             </p>
           </div>
         </section>

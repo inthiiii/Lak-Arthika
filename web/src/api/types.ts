@@ -54,6 +54,46 @@ export interface QualityStatus {
   latest_error: string | null
 }
 
+export interface ForecastRecord {
+  market_id: string
+  market_name: string
+  commodity: string
+  category: string
+  generated_at: string
+  origin_date: string
+  training_cutoff: string
+  forecast_date: string
+  horizon_days: 7 | 14 | 30
+  point_forecast_lkr: number
+  lower_80_lkr: number
+  upper_80_lkr: number
+  lower_95_lkr: number
+  upper_95_lkr: number
+  model_version: string
+  feature_version: string
+  model_type: string
+  experimental: true
+}
+
+export interface HorizonQuality {
+  horizon_days: 7 | 14 | 30
+  samples: number
+  folds: number
+  model_metrics: Record<string, number | null>
+  baseline_metrics: Record<string, Record<string, number | null>>
+  interval_coverage_80: number
+  interval_coverage_95: number
+  interval_radius_80_lkr: number
+  interval_radius_95_lkr: number
+  beats_seasonal_baseline: boolean
+}
+
+export interface ForecastQuality {
+  model_version: string
+  evaluated_at: string
+  horizons: HorizonQuality[]
+}
+
 export type Direction = 'all' | 'rising' | 'stable' | 'falling'
 
 export interface DashboardFilters {

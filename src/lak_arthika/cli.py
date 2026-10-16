@@ -9,6 +9,8 @@ import typer
 
 from lak_arthika import __version__
 from lak_arthika.config import get_settings
+from lak_arthika.forecasting.artifacts import load_metadata, load_quality
+from lak_arthika.forecasting.trainer import train_forecasting_engine
 from lak_arthika.pipelines.harti_daily import run_harti_daily_sync, run_harti_file_sync
 from lak_arthika.pipelines.harti_historical import (
     discover_historical_bulletins,
@@ -31,6 +33,12 @@ harti_app = typer.Typer(
 )
 
 app.add_typer(harti_app, name="harti")
+
+forecast_app = typer.Typer(
+    help="Train and inspect experimental market-price forecasts.",
+    no_args_is_help=True,
+)
+app.add_typer(forecast_app, name="forecast")
 
 
 def _parse_date(value: str, *, option_name: str) -> date:
@@ -284,6 +292,42 @@ def harti_status() -> None:
         "manifest_path": str(settings.harti_manifest_path),
     }
     typer.echo(json.dumps(summary, indent=2))
+
+
+@forecast_app.command("train")
+def train_forecast(
+    version: Annotated[str, typer.Option("--version", help="Immutable model version.")],
+    cutoff: Annotated[
+        str | None, typer.Option("--cutoff", help="Optional YYYY-MM-DD cutoff.")
+    ] = None,
+) -> None:
+    """Train, backtest, package and promote forecasting-engine-v1."""
+
+    settings = get_settings()
+    metadata = train_forecasting_engine(
+        database_path=settings.harti_analytics_path,
+        model_root=settings.forecast_model_root,
+        model_version=version,
+        cutoff=_parse_date(cutoff, option_name="--cutoff") if cutoff else None,
+    )
+    typer.echo(metadata.model_dump_json(indent=2))
+
+
+@forecast_app.command("status")
+def forecast_status() -> None:
+    """Show the promoted model and its out-of-time quality report."""
+
+    settings = get_settings()
+    try:
+        payload = {
+            "model": load_metadata(settings.forecast_model_root).model_dump(mode="json"),
+            "quality": load_quality(settings.forecast_model_root).model_dump(mode="json"),
+        }
+    except FileNotFoundError as error:
+        raise typer.BadParameter(
+            "No promoted forecast exists. Run `lak-arthika forecast train --version forecast-v1`."
+        ) from error
+    typer.echo(json.dumps(payload, indent=2))
 
 
 if __name__ == "__main__":

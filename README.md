@@ -11,6 +11,8 @@ APIs and geospatial foundations for future forecasting and scenario simulation.
 - Phase 1B: resumable historical data engine, quality quarantine, DuckDB analytics and
   map-ready market references
 - Phase 1C: interactive Sri Lanka market-price map and public evidence dashboard
+- Phase 2 / engine-v1: leakage-safe 7, 14 and 30-day forecasts, rolling backtests,
+  uncertainty intervals and versioned model artifacts
 
 ## Requirements
 
@@ -71,6 +73,20 @@ Inspect ingestion health:
 uv run lak-arthika harti status
 ```
 
+## Train forecasting-engine-v1
+
+Training uses only observations available before each target date, evaluates expanding
+time windows against persistence, moving-average and seasonal baselines, then promotes a
+versioned local artifact:
+
+```bash
+uv run lak-arthika forecast train --version forecast-v1
+uv run lak-arthika forecast status
+```
+
+Generated model files remain outside Git under `models/forecasting/`. The API refuses to
+serve forecasts until a complete version is promoted through `current.json`.
+
 ## Data architecture
 
 ```text
@@ -110,6 +126,9 @@ Useful endpoints:
 - `GET /v1/markets`
 - `GET /v1/markets/{market_id}/prices`
 - `GET /v1/data-quality/status`
+- `GET /v1/forecasts`
+- `GET /v1/forecasts/quality`
+- `GET /v1/models/current`
 - Interactive documentation: <http://127.0.0.1:8000/docs>
 
 ## Run the public dashboard

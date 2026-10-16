@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     harti_quarantine_path: Path = Path("data/metadata/harti_quarantine.jsonl")
     harti_analytics_path: Path = Path("data/analytics/lak_arthika.duckdb")
     markets_reference_path: Path = Path("data/reference/markets.csv")
+    forecast_model_root: Path = Path("models/forecasting")
     harti_request_delay_seconds: float = 1.0
     harti_max_download_attempts: int = 3
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
