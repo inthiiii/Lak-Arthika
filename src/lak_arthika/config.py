@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     markets_reference_path: Path = Path("data/reference/markets.csv")
     forecast_model_root: Path = Path("models/forecasting")
     external_signals_path: Path = Path("data/processed/signals/external_signals.parquet")
+    stress_signals_path: Path = Path("data/processed/stress/stress_signals.parquet")
+    stress_alerts_path: Path = Path("data/processed/stress/alerts.json")
+    stress_report_path: Path = Path("data/processed/stress/backtest.json")
     harti_request_delay_seconds: float = 1.0
     harti_max_download_attempts: int = 3
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"

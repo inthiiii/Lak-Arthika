@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import { pricePointsFixture } from '../test/fixtures'
+import { pricePointsFixture, stressFixture } from '../test/fixtures'
 import { MarketMap } from './MarketMap'
 
 vi.mock('maplibre-gl', () => ({ setWorkerUrl: vi.fn() }))
@@ -36,5 +36,17 @@ describe('MarketMap', () => {
 
     fireEvent.click(falling)
     expect(onSelect).toHaveBeenCalledWith('kandy')
+  })
+
+  it('colours and labels markers by economic-pressure severity', () => {
+    render(
+      <MarketMap
+        points={pricePointsFixture.slice(0, 1)} selectedMarketId="dambulla"
+        onSelect={vi.fn()} mode="stress" stressSignals={stressFixture}
+      />,
+    )
+    const marker = screen.getByRole('button', { name: /Dambulla, warning pressure, score 78/ })
+    expect(marker).toHaveClass('stress-warning')
+    expect(screen.getByText('Pressure score 78 / 100')).toBeInTheDocument()
   })
 })

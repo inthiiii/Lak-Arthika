@@ -19,6 +19,12 @@ from lak_arthika.models.market import CatalogResponse, MarketPricePoint, MarketR
 from lak_arthika.models.price import PriceRecord
 from lak_arthika.models.quality import QualityStatus
 from lak_arthika.models.signals import ModelHealth
+from lak_arthika.models.stress import (
+    EconomicAlert,
+    StressBacktestReport,
+    StressMethodology,
+    StressSignal,
+)
 from lak_arthika.storage.analytics import (
     query_catalog,
     query_market_price_points,
@@ -26,6 +32,8 @@ from lak_arthika.storage.analytics import (
     query_price_summary,
 )
 from lak_arthika.storage.manifest import load_manifest
+from lak_arthika.storage.stress import load_alerts, load_backtest, query_stress_signals
+from lak_arthika.stress.engine import methodology
 
 
 class HealthResponse(BaseModel):
@@ -111,6 +119,9 @@ def create_app(
     markets_path: Path | None = None,
     manifest_path: Path | None = None,
     forecast_root: Path | None = None,
+    stress_signals_path: Path | None = None,
+    stress_alerts_path: Path | None = None,
+    stress_report_path: Path | None = None,
 ) -> FastAPI:
     """Create and configure the FastAPI application."""
 
@@ -137,6 +148,9 @@ def create_app(
     application.state.harti_manifest_path = manifest_path or settings.harti_manifest_path
     application.state.forecast_model_root = forecast_root or settings.forecast_model_root
     application.state.external_signals_path = settings.external_signals_path
+    application.state.stress_signals_path = stress_signals_path or settings.stress_signals_path
+    application.state.stress_alerts_path = stress_alerts_path or settings.stress_alerts_path
+    application.state.stress_report_path = stress_report_path or settings.stress_report_path
 
     @application.get(
         "/health",
@@ -399,6 +413,121 @@ def create_app(
             model_root=Path(request.app.state.forecast_model_root),
             signals_path=Path(request.app.state.external_signals_path),
         )
+
+    def read_stress(
+        request: Request,
+        *,
+        market_id: str | None = None,
+        commodity: str | None = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
+        latest: bool = False,
+    ) -> list[StressSignal]:
+        try:
+            return query_stress_signals(
+                Path(request.app.state.stress_signals_path),
+                market_id=market_id,
+                commodity=commodity,
+                start_date=start_date,
+                end_date=end_date,
+                latest=latest,
+            )
+        except FileNotFoundError as error:
+            raise HTTPException(
+                status_code=503,
+                detail=("Economic-stress signals are unavailable. Run `lak-arthika stress build`."),
+            ) from error
+
+    @application.get(
+        "/v1/stress/current", response_model=list[StressSignal], tags=["Economic Stress"]
+    )
+    def current_stress(request: Request, commodity: str | None = None) -> list[StressSignal]:
+        """Return the latest pressure signal for each market/commodity."""
+
+        return read_stress(request, commodity=commodity, latest=True)
+
+    @application.get(
+        "/v1/stress/history", response_model=list[StressSignal], tags=["Economic Stress"]
+    )
+    def stress_history(
+        request: Request,
+        market_id: str | None = None,
+        commodity: str | None = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
+    ) -> list[StressSignal]:
+        """Return filtered historical pressure signals."""
+
+        return read_stress(
+            request,
+            market_id=market_id,
+            commodity=commodity,
+            start_date=start_date,
+            end_date=end_date,
+        )
+
+    @application.get(
+        "/v1/stress/markets/{market_id}",
+        response_model=list[StressSignal],
+        tags=["Economic Stress"],
+    )
+    def market_stress(
+        market_id: str, request: Request, commodity: str | None = None
+    ) -> list[StressSignal]:
+        """Return one market's pressure history."""
+
+        rows = read_stress(request, market_id=market_id, commodity=commodity)
+        if not rows:
+            raise HTTPException(status_code=404, detail="Market stress history was not found.")
+        return rows
+
+    @application.get("/v1/alerts", response_model=list[EconomicAlert], tags=["Economic Stress"])
+    def alerts(
+        request: Request, status: Literal["active", "resolved"] | None = None
+    ) -> list[EconomicAlert]:
+        """Return deduplicated alert lifecycles."""
+
+        try:
+            records = load_alerts(Path(request.app.state.stress_alerts_path))
+        except FileNotFoundError as error:
+            raise HTTPException(
+                status_code=503, detail="Economic alerts are unavailable."
+            ) from error
+        return [item for item in records if status is None or item.status == status]
+
+    @application.get(
+        "/v1/alerts/{alert_id}", response_model=EconomicAlert, tags=["Economic Stress"]
+    )
+    def alert_detail(alert_id: str, request: Request) -> EconomicAlert:
+        """Return one alert with lifecycle evidence."""
+
+        record = next((item for item in alerts(request) if item.alert_id == alert_id), None)
+        if record is None:
+            raise HTTPException(status_code=404, detail="Alert was not found.")
+        return record
+
+    @application.get(
+        "/v1/stress/methodology", response_model=StressMethodology, tags=["Economic Stress"]
+    )
+    def stress_methodology() -> StressMethodology:
+        """Explain score weights, event definition and safety limits."""
+
+        return methodology()
+
+    @application.get(
+        "/v1/stress/backtest",
+        response_model=StressBacktestReport,
+        tags=["Economic Stress"],
+    )
+    def stress_backtest(request: Request) -> StressBacktestReport:
+        """Expose untouched temporal test performance."""
+
+        try:
+            return load_backtest(Path(request.app.state.stress_report_path))
+        except FileNotFoundError as error:
+            raise HTTPException(
+                status_code=503, detail="Stress backtest is unavailable."
+            ) from error
 
     return application
 

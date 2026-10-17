@@ -5,8 +5,12 @@ import { FilterPanel } from './components/FilterPanel'
 import { PriceSummary } from './components/PriceSummary'
 import { QualityBanner } from './components/QualityBanner'
 import { ModelHealthPanel } from './components/ModelHealthPanel'
+import { StressPanel } from './components/StressPanel'
+import { StressSummary } from './components/StressSummary'
 import {
+  useActiveAlerts,
   useCatalog,
+  useCurrentStress,
   useForecastQuality,
   useForecasts,
   useMapPrices,
@@ -84,6 +88,14 @@ function App() {
   const forecasts = useForecasts(effectiveSelectedMarketId, commodity)
   const forecastQuality = useForecastQuality()
   const modelHealth = useModelHealth()
+  const stress = useCurrentStress(commodity)
+  const activeAlerts = useActiveAlerts()
+  const visibleMarketIds = new Set(filteredPoints.map((point) => point.market_id))
+  const filteredStress = (stress.data ?? []).filter((item) => visibleMarketIds.has(item.market_id))
+  const filteredAlerts = (activeAlerts.data ?? []).filter(
+    (item) => item.commodity === commodity && visibleMarketIds.has(item.market_id),
+  )
+  const selectedStress = stress.data?.find((item) => item.market_id === effectiveSelectedMarketId)
 
   const loading = catalog.isLoading || prices.isLoading
   const error = catalog.error ?? prices.error
@@ -129,22 +141,36 @@ function App() {
           </section>
         ) : (
           <>
-            <PriceSummary points={filteredPoints} selectedDate={selectedDate} />
+            {filters.mode === 'stress' ? (
+              <StressSummary signals={filteredStress} alerts={filteredAlerts} />
+            ) : (
+              <PriceSummary points={filteredPoints} selectedDate={selectedDate} />
+            )}
             <Suspense fallback={<section className="dashboard-skeleton"><div /><div /><div /></section>}>
               <section className="workspace-grid" aria-label="Market map and selected market">
                 <MarketMap
                   points={filteredPoints}
                   selectedMarketId={effectiveSelectedMarketId}
                   onSelect={setSelectedMarketId}
+                  mode={filters.mode}
+                  stressSignals={stress.data ?? []}
                 />
-                <MarketPanel
-                  point={selectedPoint}
-                  history={history.data ?? []}
-                  isLoading={history.isLoading}
-                  forecasts={forecasts.data ?? []}
-                  forecastQuality={forecastQuality.data}
-                  forecastUnavailable={forecasts.isError || forecastQuality.isError}
-                />
+                {filters.mode === 'stress' ? (
+                  <StressPanel
+                    signal={selectedStress}
+                    alerts={filteredAlerts}
+                    unavailable={stress.isError || activeAlerts.isError}
+                  />
+                ) : (
+                  <MarketPanel
+                    point={selectedPoint}
+                    history={history.data ?? []}
+                    isLoading={history.isLoading}
+                    forecasts={forecasts.data ?? []}
+                    forecastQuality={forecastQuality.data}
+                    forecastUnavailable={forecasts.isError || forecastQuality.isError}
+                  />
+                )}
               </section>
             </Suspense>
           </>

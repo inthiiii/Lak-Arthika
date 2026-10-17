@@ -8,6 +8,8 @@ import type {
   ModelHealth,
   PriceHistoryRecord,
   QualityStatus,
+  StressSignal,
+  EconomicAlert,
 } from './types'
 
 export function useCatalog() {
@@ -85,6 +87,26 @@ export function useModelHealth() {
   return useQuery({
     queryKey: ['model-health'],
     queryFn: ({ signal }) => apiGet<ModelHealth>('/v1/models/health', undefined, signal),
+    staleTime: 60 * 1000,
+    retry: false,
+  })
+}
+
+export function useCurrentStress(commodity: string) {
+  return useQuery({
+    queryKey: ['current-stress', commodity],
+    queryFn: ({ signal }) =>
+      apiGet<StressSignal[]>('/v1/stress/current', { commodity }, signal),
+    enabled: Boolean(commodity),
+    staleTime: 60 * 1000,
+    retry: false,
+  })
+}
+
+export function useActiveAlerts() {
+  return useQuery({
+    queryKey: ['economic-alerts', 'active'],
+    queryFn: ({ signal }) => apiGet<EconomicAlert[]>('/v1/alerts', { status: 'active' }, signal),
     staleTime: 60 * 1000,
     retry: false,
   })

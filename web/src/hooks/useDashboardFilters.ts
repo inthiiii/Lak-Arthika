@@ -1,8 +1,8 @@
 import { useCallback, useState } from 'react'
-import type { DashboardFilters, Direction } from '../api/types'
+import type { DashboardFilters, Direction, MapMode } from '../api/types'
 
 const defaults: DashboardFilters = {
-  commodity: '', date: '', province: '', district: '', market: '', direction: 'all',
+  commodity: '', date: '', province: '', district: '', market: '', direction: 'all', mode: 'prices',
 }
 
 function readFilters(): DashboardFilters {
@@ -17,6 +17,7 @@ function readFilters(): DashboardFilters {
     direction: ['rising', 'stable', 'falling'].includes(direction ?? '')
       ? (direction as Direction)
       : 'all',
+    mode: params.get('mode') === 'stress' ? ('stress' as MapMode) : 'prices',
   }
 }
 
@@ -28,7 +29,7 @@ export function useDashboardFilters() {
       const next = { ...current, ...changes }
       const params = new URLSearchParams()
       Object.entries(next).forEach(([key, value]) => {
-        if (value && value !== 'all') params.set(key, value)
+        if (value && value !== 'all' && value !== 'prices') params.set(key, value)
       })
       const url = `${window.location.pathname}${params.size ? `?${params}` : ''}`
       window.history[replace ? 'replaceState' : 'pushState']({}, '', url)

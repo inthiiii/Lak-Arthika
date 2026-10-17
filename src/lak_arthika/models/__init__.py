@@ -5,6 +5,7 @@ from lak_arthika.models.manifest import BulletinManifestRecord
 from lak_arthika.models.market import CatalogResponse, MarketPricePoint, MarketReference
 from lak_arthika.models.price import PriceRecord
 from lak_arthika.models.quality import QualityStatus
+from lak_arthika.models.stress import EconomicAlert, StressComponents, StressSignal
 
 __all__ = [
     "BulletinManifestRecord",
@@ -16,4 +17,7 @@ __all__ = [
     "ModelMetadata",
     "PriceRecord",
     "QualityStatus",
+    "EconomicAlert",
+    "StressComponents",
+    "StressSignal",
 ]

@@ -15,6 +15,8 @@ APIs and geospatial foundations for future forecasting and scenario simulation.
   uncertainty intervals and versioned model artifacts
 - Phase 2B: point-in-time weather/economic signals, champion–challenger promotion,
   experiment registry, drift/freshness health and public model monitoring
+- Phase 3 / economic-stress-v1: interpretable market-pressure scoring, a training-only
+  spatial graph, temporal event backtesting, alert lifecycles and an explainable stress map
 
 ## Requirements
 
@@ -111,6 +113,20 @@ uv run lak-arthika forecast health
 Generated model files remain outside Git under `models/forecasting/`. The API refuses to
 serve forecasts until a complete version is promoted through `current.json`.
 
+## Build economic-stress-v1
+
+Build the leakage-safe historical signal store, calibrate the warning threshold on a
+separate time block, evaluate the untouched final block, and derive alert lifecycles:
+
+```bash
+uv run lak-arthika stress build
+uv run lak-arthika stress status
+```
+
+The dashboard's **Economic stress** mode shows the latest score, component breakdown,
+confidence and stale-data state. Scores are experimental price-pressure warnings—not
+shortage predictions. See [the full methodology](docs/economic-stress-v1.md).
+
 ## Data architecture
 
 ```text
@@ -154,6 +170,13 @@ Useful endpoints:
 - `GET /v1/forecasts/quality`
 - `GET /v1/models/current`
 - `GET /v1/models/health`
+- `GET /v1/stress/current`
+- `GET /v1/stress/history`
+- `GET /v1/stress/markets/{market_id}`
+- `GET /v1/stress/methodology`
+- `GET /v1/stress/backtest`
+- `GET /v1/alerts`
+- `GET /v1/alerts/{alert_id}`
 - Interactive documentation: <http://127.0.0.1:8000/docs>
 
 ## Run the public dashboard

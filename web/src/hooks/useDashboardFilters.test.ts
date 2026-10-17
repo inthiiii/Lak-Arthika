@@ -6,13 +6,14 @@ describe('useDashboardFilters', () => {
   beforeEach(() => window.history.replaceState({}, '', '/'))
 
   it('reads filters from the URL', () => {
-    window.history.replaceState({}, '', '/?commodity=Tomato&province=Central&direction=rising')
+    window.history.replaceState({}, '', '/?commodity=Tomato&province=Central&direction=rising&mode=stress')
     const { result } = renderHook(() => useDashboardFilters())
 
     expect(result.current.filters).toMatchObject({
       commodity: 'Tomato',
       province: 'Central',
       direction: 'rising',
+      mode: 'stress',
     })
   })
 

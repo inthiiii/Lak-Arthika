@@ -85,6 +85,14 @@ const modelHealth = {
   messages: ['The strongest baseline still wins at 7d.'],
 }
 
+const stressSignals = [{
+  market_id: 'dambulla', market_name: 'Dambulla', district: 'Matale', province: 'Central',
+  latitude: 7.8742, longitude: 80.6511, commodity: 'Tomato', observation_date: '2025-12-31',
+  price_midpoint_lkr: 300, score: 78, severity: 'warning', confidence: 0.9,
+  components: { anomaly: 90, momentum: 80, forecast_surprise: 70, spatial_pressure: 60 },
+  evidence_observations: 30, stale: false, methodology_version: 'economic-stress-v1',
+}]
+
 async function mockDashboard(page: Page) {
   await page.route('**/styles/bright', (route) => route.fulfill({
     contentType: 'application/json',
@@ -104,6 +112,8 @@ async function mockDashboard(page: Page) {
   await page.route('**/v1/forecasts/quality', (route) => route.fulfill({ json: forecastQuality }))
   await page.route('**/v1/forecasts?**', (route) => route.fulfill({ json: forecasts }))
   await page.route('**/v1/models/health', (route) => route.fulfill({ json: modelHealth }))
+  await page.route('**/v1/stress/current**', (route) => route.fulfill({ json: stressSignals }))
+  await page.route('**/v1/alerts**', (route) => route.fulfill({ json: [] }))
 }
 
 test.beforeEach(async ({ page }) => {
@@ -177,4 +187,12 @@ test('an API failure displays an understandable message', async ({ page }) => {
   await page.goto('/')
   await expect(page.getByRole('alert')).toContainText('We could not load the market data')
   await expect(page.getByRole('alert')).toContainText('The catalog is temporarily unavailable.')
+})
+
+test('economic-stress mode explains a market warning and remains in the URL', async ({ page }) => {
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Economic stress' }).click()
+  await expect(page).toHaveURL(/mode=stress/)
+  await expect(page.getByRole('button', { name: /Dambulla, warning pressure, score 78/ })).toBeVisible()
+  await expect(page.getByLabel('Economic pressure explanation')).toContainText('not a shortage prediction')
 })
