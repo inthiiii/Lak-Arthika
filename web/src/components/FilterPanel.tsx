@@ -21,7 +21,11 @@ export function FilterPanel({ catalog, filters, points, onChange, onReset }: Pro
     <section className="filter-panel" aria-label="Dashboard filters">
       <div className="filter-heading">
         <span>Explore the evidence</span>
-        <button type="button" onClick={onReset}>Reset filters</button>
+        <div className="mode-switch" aria-label="Map mode">
+          <button type="button" className={filters.mode === 'prices' ? 'is-active' : ''} onClick={() => onChange({ mode: 'prices' })}>Price movement</button>
+          <button type="button" className={filters.mode === 'stress' ? 'is-active' : ''} onClick={() => onChange({ mode: 'stress' })}>Economic stress</button>
+          <button type="button" onClick={onReset}>Reset filters</button>
+        </div>
       </div>
       <div className="filter-grid">
         <label>

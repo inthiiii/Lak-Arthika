@@ -26,6 +26,8 @@ from lak_arthika.signals.nasa_power import fetch_power_signals
 from lak_arthika.storage.analytics import query_price_history, refresh_analytics
 from lak_arthika.storage.manifest import load_manifest
 from lak_arthika.storage.signals import load_signals, store_signals
+from lak_arthika.storage.stress import load_alerts, load_backtest, query_stress_signals
+from lak_arthika.stress.engine import build_stress_engine
 
 app = typer.Typer(
     name="lak-arthika",
@@ -51,6 +53,12 @@ signals_app = typer.Typer(
     no_args_is_help=True,
 )
 app.add_typer(signals_app, name="signals")
+
+stress_app = typer.Typer(
+    help="Build and inspect experimental economic-pressure warnings.",
+    no_args_is_help=True,
+)
+app.add_typer(stress_app, name="stress")
 
 
 def _parse_date(value: str, *, option_name: str) -> date:
@@ -423,6 +431,54 @@ def signal_status() -> None:
         for source in ("nasa_power", "cbsl", "ceypetco")
     }
     typer.echo(json.dumps(by_source, indent=2, default=str))
+
+
+@stress_app.command("build")
+def build_stress(
+    cutoff: Annotated[
+        str | None, typer.Option("--cutoff", help="Optional YYYY-MM-DD cutoff.")
+    ] = None,
+) -> None:
+    """Build leakage-safe scores, alerts and an out-of-time report."""
+
+    settings = get_settings()
+    summary = build_stress_engine(
+        database_path=settings.harti_analytics_path,
+        signals_path=settings.stress_signals_path,
+        alerts_path=settings.stress_alerts_path,
+        report_path=settings.stress_report_path,
+        cutoff=_parse_date(cutoff, option_name="--cutoff") if cutoff else None,
+    )
+    typer.echo(json.dumps(summary, indent=2, default=str))
+
+
+@stress_app.command("status")
+def stress_status() -> None:
+    """Show current signal, alert and temporal-evaluation status."""
+
+    settings = get_settings()
+    try:
+        signals = query_stress_signals(settings.stress_signals_path, latest=True)
+        alerts = load_alerts(settings.stress_alerts_path)
+        report = load_backtest(settings.stress_report_path)
+    except FileNotFoundError as error:
+        raise typer.BadParameter(
+            "Stress artifacts are unavailable. Run `lak-arthika stress build`."
+        ) from error
+    typer.echo(
+        json.dumps(
+            {
+                "current_signals": len(signals),
+                "active_alerts": sum(item.status == "active" for item in alerts),
+                "latest_observation_date": max(
+                    (item.observation_date for item in signals), default=None
+                ),
+                "backtest": report.model_dump(mode="json"),
+            },
+            indent=2,
+            default=str,
+        )
+    )
 
 
 if __name__ == "__main__":

@@ -115,7 +115,52 @@ export interface ModelHealth {
   messages: string[]
 }
 
+export type StressSeverity = 'normal' | 'watch' | 'warning' | 'critical'
+
+export interface StressComponents {
+  anomaly: number
+  momentum: number
+  forecast_surprise: number
+  spatial_pressure: number
+}
+
+export interface StressSignal {
+  market_id: string
+  market_name: string
+  district: string
+  province: string
+  latitude: number
+  longitude: number
+  commodity: string
+  observation_date: string
+  price_midpoint_lkr: number
+  score: number
+  severity: StressSeverity
+  confidence: number
+  components: StressComponents
+  evidence_observations: number
+  stale: boolean
+  methodology_version: string
+}
+
+export interface EconomicAlert {
+  alert_id: string
+  market_id: string
+  market_name: string
+  commodity: string
+  status: 'active' | 'resolved'
+  severity: StressSeverity
+  opened_at: string
+  last_observed_at: string
+  resolved_at: string | null
+  peak_score: number
+  latest_score: number
+  observation_count: number
+  summary: string
+}
+
 export type Direction = 'all' | 'rising' | 'stable' | 'falling'
+export type MapMode = 'prices' | 'stress'
 
 export interface DashboardFilters {
   commodity: string
@@ -124,4 +169,5 @@ export interface DashboardFilters {
   district: string
   market: string
   direction: Direction
+  mode: MapMode
 }

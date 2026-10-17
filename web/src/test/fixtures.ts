@@ -1,4 +1,4 @@
-import type { Catalog, MarketPricePoint, PriceHistoryRecord, QualityStatus } from '../api/types'
+import type { Catalog, MarketPricePoint, PriceHistoryRecord, QualityStatus, StressSignal } from '../api/types'
 
 export const catalogFixture: Catalog = {
   commodities: ['Tomato', 'Carrot'],
@@ -94,5 +94,15 @@ export const historyFixture: PriceHistoryRecord[] = [
     moving_average_7: 282,
     moving_average_30: 270,
     source_url: 'https://example.test/latest.pdf',
+  },
+]
+
+export const stressFixture: StressSignal[] = [
+  {
+    market_id: 'dambulla', market_name: 'Dambulla', district: 'Matale', province: 'Central',
+    latitude: 7.8742, longitude: 80.6511, commodity: 'Tomato', observation_date: '2025-12-31',
+    price_midpoint_lkr: 300, score: 78, severity: 'warning', confidence: 0.9,
+    components: { anomaly: 90, momentum: 80, forecast_surprise: 70, spatial_pressure: 60 },
+    evidence_observations: 30, stale: false, methodology_version: 'economic-stress-v1',
   },
 ]
